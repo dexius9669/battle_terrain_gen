@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Генератор местности для сражений — Поиски Славы и Удачи</title>
+<style>
+  :root{
+    --ink:#2b2620; --paper:#f5f1e6; --panel:#fffdf7; --line:#d8cfbc;
+    --accent:#7a5c3e; --muted:#6f675a;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font:16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap{max-width:1200px; margin:0 auto; padding:24px 16px 48px}
+  header h1{font-family:Georgia,"Times New Roman",serif; font-size:1.7rem; margin:0 0 4px}
+  header p{margin:0 0 18px; color:var(--muted)}
+  .controls{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:12px 14px; margin-bottom:18px;
+  }
+  .controls label{font-weight:600}
+  select{
+    font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:8px;
+    background:#fff; color:var(--ink); max-width:100%;
+  }
+  button{
+    font:inherit; padding:7px 14px; border:1px solid var(--accent); border-radius:8px;
+    background:var(--accent); color:#fff; cursor:pointer;
+  }
+  button.secondary{background:#fff; color:var(--accent)}
+  button:hover{filter:brightness(1.08)}
+  .layout{display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start}
+  .map-side{flex:1 1 480px; min-width:300px}
+  .info-side{flex:1 1 320px; min-width:280px; display:flex; flex-direction:column; gap:16px}
+  canvas#map{
+    width:100%; max-width:800px; aspect-ratio:1/1; display:block;
+    border:1px solid var(--line); border-radius:6px; background:#fff; cursor:crosshair;
+  }
+  .hint{color:var(--muted); font-size:.9rem; margin:8px 0 0}
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:12px 14px;
+  }
+  .panel h2{font-family:Georgia,serif; font-size:1.05rem; margin:0 0 8px}
+  ul.legend{list-style:none; margin:0; padding:0}
+  ul.legend li{display:flex; align-items:center; gap:8px; padding:2px 0}
+  .swatch{width:18px; height:18px; border-radius:4px; border:1px solid rgba(0,0,0,.25); flex:none}
+  .dot{width:14px; height:14px; border-radius:50%; flex:none}
+  table.rules{border-collapse:collapse; width:100%; font-size:.92rem}
+  table.rules th, table.rules td{
+    border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top;
+  }
+  table.rules th{background:#efe8d8}
+  .note{color:var(--muted); font-size:.85rem; margin:8px 0 0}
+  .scale{font-size:.9rem; color:var(--muted); margin-top:6px}
+  @media (max-width:720px){ header h1{font-size:1.35rem} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Генератор местности для сражений</h1>
+    <p>«Внутри» гекса: поле 1 × 1 км, пять рядов по пять участков 200 × 200 м. Сетка — 25 м по правилам исследования дикой местности.</p>
+  </header>
+
+  <div class="controls">
+    <label for="hexType">Местность гекса:</label>
+    <select id="hexType"></select>
+    <button id="btnGen">Сгенерировать</button>
+    <button id="btnPng" class="secondary">Скачать PNG</button>
+    <button id="btnClear" class="secondary">Сбросить точку</button>
+  </div>
+
+  <div class="layout">
+    <div class="map-side">
+      <canvas id="map" width="800" height="800"></canvas>
+      <p class="hint">Кликните по карте — точка отсчёта и зоны дистанций: Рядом, Близко, Неподалёку, Далеко. Повторный клик переносит точку.</p>
+      <p class="scale">Масштаб: мелкая клетка — 25 м, жирная сетка — 200 м, всё поле — 1 км.</p>
+    </div>
+
+    <div class="info-side">
+      <div class="panel">
+        <h2>Местность</h2>
+        <ul class="legend" id="terrainLegend"></ul>
+      </div>
+      <div class="panel">
+        <h2>Дистанции (от точки на карте)</h2>
+        <ul class="legend">
+          <li><span class="dot" style="background:#d1495b"></span>Рядом — до 25 м / 28 ярдов</li>
+          <li><span class="dot" style="background:#e8a13c"></span>Близко — 25–50 м / 28–55 ярдов</li>
+          <li><span class="dot" style="background:#3d7ea6"></span>Неподалёку — 50–150 м / 55–165 ярдов</li>
+          <li><span class="dot" style="background:#9a9184"></span>Далеко — 150+ м / 165+ ярдов (всё за кольцом)</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h2>Правила (2к6 → %)</h2>
+        <table class="rules">
+          <tr><th>Местность гекса</th><th>«Внутри» гекса</th></tr>
+          <tr><td>Открытая</td><td>16,7% — лес; иначе 16,7% — холм; иначе ровная открытая</td></tr>
+          <tr><td>Лесистая</td><td>58,3% — лес; иначе ровная открытая</td></tr>
+          <tr><td>Болотистая</td><td>58,3% — болото; иначе ровная открытая</td></tr>
+          <tr><td>Побережье / речная</td><td>16,7% — лес; иначе 16,7% — болото; иначе 16,7% — холм (если нет болота); иначе ровная открытая</td></tr>
+          <tr><td>Пустынная</td><td>16,7% — дюна; иначе ровная открытая</td></tr>
+          <tr><td>Холмистая</td><td>58,3% — холм; иначе 27,8% — лес; иначе ровная открытая</td></tr>
+          <tr><td>Горы</td><td>27,8% — открытая местность (из неё 41,7% — лес); иначе гора</td></tr>
+        </table>
+        <p class="note">Проценты эквивалентны броскам 2к6: 10+ ≈ 16,7%, 9+ ≈ 27,8%, 8+ ≈ 41,7%, 7+ ≈ 58,3%. Броски последовательные — до первого успеха.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+var P10 = 100 * 6 / 36;   // 2к6: 10+
+var P9  = 100 * 10 / 36;  // 2к6: 9+
+var P8  = 100 * 15 / 36;  // 2к6: 8+
+var P7  = 100 * 21 / 36;  // 2к6: 7+
+
+function roll(p) { return Math.random() * 100 < p; }
+
+var HEX_TYPES = [
+  { id: "open",      name: "Открытая местность" },
+  { id: "forest",    name: "Лесистая местность" },
+  { id: "swamp",     name: "Болотистая местность" },
+  { id: "coast",     name: "Побережье или речная местность" },
+  { id: "desert",    name: "Пустынная местность" },
+  { id: "hills",     name: "Холмистая местность" },
+  { id: "mountains", name: "Горы" }
+];
+
+var TERRAINS = {
+  plain:    { name: "Ровная открытая", color: "#d7e4bd" },
+  forest:   { name: "Лес",             color: "#4c7a45" },
+  hill:     { name: "Холм",            color: "#cbb287" },
+  swamp:    { name: "Болото",          color: "#6f9b93" },
+  dune:     { name: "Дюна",            color: "#ecd9a0" },
+  mountain: { name: "Гора",            color: "#a89f91" }
+};
+
+function cellTerrain(hex) {
+  switch (hex) {
+    case "open":
+      return roll(P10) ? "forest" : roll(P10) ? "hill" : "plain";
+    case "forest":
+      return roll(P7) ? "forest" : "plain";
+    case "swamp":
+      return roll(P7) ? "swamp" : "plain";
+    case "coast":
+      return roll(P10) ? "forest" : roll(P10) ? "swamp" : roll(P10) ? "hill" : "plain";
+    case "desert":
+      return roll(P10) ? "dune" : "plain";
+    case "hills":
+      return roll(P7) ? "hill" : roll(P9) ? "forest" : "plain";
+    case "mountains":
+      return roll(P9) ? (roll(P8) ? "forest" : "plain") : "mountain";
+  }
+  return "plain";
+}
+
+var BLOCKS = 5;          // участков 200 м по стороне
+var CELLS = 40;          // клеток 25 м по стороне
+var FIELD_M = 1000;      // метров по стороне
+var BASE = 800;          // базовый размер отрисовки, px
+
+var state = {
+  hex: "open",
+  blocks: [],            // 25 типов местности
+  point: null            // {x, y} в метрах
+};
+
+function generate() {
+  state.blocks = [];
+  for (var i = 0; i < BLOCKS * BLOCKS; i++) {
+    state.blocks.push(cellTerrain(state.hex));
+  }
+}
+
+// Детерминированный ГПСЧ для узоров местности (стабилен при перерисовке)
+function mulberry32(seed) {
+  var a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function drawMarks(ctx, type, bx, by, B, rnd, k) {
+  var i, x, y, s;
+  ctx.save();
+  ctx.lineWidth = 2 * k;
+  if (type === "forest") {
+    ctx.fillStyle = "rgba(35,66,32,0.55)";
+    for (i = 0; i < 5; i++) {
+      x = bx + B * (0.18 + 0.64 * rnd());
+      y = by + B * (0.18 + 0.64 * rnd());
+      s = B * 0.055;
+      ctx.beginPath();
+      ctx.moveTo(x, y - s);
+      ctx.lineTo(x - s * 0.8, y + s * 0.7);
+      ctx.lineTo(x + s * 0.8, y + s * 0.7);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else if (type === "hill") {
+    ctx.strokeStyle = "rgba(122,94,58,0.6)";
+    for (i = 0; i < 2; i++) {
+      x = bx + B * (0.3 + 0.4 * rnd());
+      y = by + B * (0.35 + 0.35 * rnd());
+      s = B * (0.12 + 0.08 * rnd());
+      ctx.beginPath();
+      ctx.arc(x, y, s, Math.PI * 1.15, Math.PI * 1.85);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, y + s * 0.45, s * 0.6, Math.PI * 1.15, Math.PI * 1.85);
+      ctx.stroke();
+    }
+  } else if (type === "swamp") {
+    ctx.strokeStyle = "rgba(38,74,68,0.6)";
+    for (i = 0; i < 4; i++) {
+      x = bx + B * (0.15 + 0.6 * rnd());
+      y = by + B * (0.15 + 0.65 * rnd());
+      s = B * 0.08;
+      ctx.beginPath();
+      ctx.moveTo(x - s, y);
+      ctx.lineTo(x + s, y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y - s * 0.6);
+      ctx.stroke();
+    }
+  } else if (type === "dune") {
+    ctx.strokeStyle = "rgba(164,131,66,0.65)";
+    for (i = 0; i < 2; i++) {
+      x = bx + B * (0.3 + 0.4 * rnd());
+      y = by + B * (0.3 + 0.4 * rnd());
+      s = B * (0.12 + 0.08 * rnd());
+      ctx.beginPath();
+      ctx.arc(x, y - s * 0.4, s, Math.PI * 0.15, Math.PI * 0.85);
+      ctx.stroke();
+    }
+  } else if (type === "mountain") {
+    ctx.fillStyle = "rgba(84,74,62,0.65)";
+    for (i = 0; i < 2; i++) {
+      x = bx + B * (0.3 + 0.4 * rnd());
+      y = by + B * (0.35 + 0.35 * rnd());
+      s = B * 0.11;
+      ctx.beginPath();
+      ctx.moveTo(x, y - s);
+      ctx.lineTo(x - s, y + s * 0.7);
+      ctx.lineTo(x + s, y + s * 0.7);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function drawMap(ctx, S, withOverlay) {
+  var k = S / BASE;
+  var cell = S / CELLS;
+  var block = S / BLOCKS;
+  var i, j;
+
+  ctx.clearRect(0, 0, S, S);
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, S, S);
+
+  for (j = 0; j < BLOCKS; j++) {
+    for (i = 0; i < BLOCKS; i++) {
+      var t = state.blocks[j * BLOCKS + i] || "plain";
+      var bx = i * block, by = j * block;
+      ctx.fillStyle = TERRAINS[t].color;
+      ctx.fillRect(bx, by, block, block);
+      drawMarks(ctx, t, bx, by, block, mulberry32(j * BLOCKS + i + 1), k);
+    }
+  }
+
+  // мелкая сетка 25 м
+  ctx.strokeStyle = "rgba(40,40,40,0.18)";
+  ctx.lineWidth = 1 * k;
+  ctx.beginPath();
+  for (i = 1; i < CELLS; i++) {
+    if (i % (CELLS / BLOCKS) === 0) continue;
+    ctx.moveTo(i * cell, 0); ctx.lineTo(i * cell, S);
+    ctx.moveTo(0, i * cell); ctx.lineTo(S, i * cell);
+  }
+  ctx.stroke();
+
+  // жирная сетка 200 м
+  ctx.strokeStyle = "rgba(30,30,30,0.55)";
+  ctx.lineWidth = 2 * k;
+  ctx.beginPath();
+  for (i = 1; i < BLOCKS; i++) {
+    ctx.moveTo(i * block, 0); ctx.lineTo(i * block, S);
+    ctx.moveTo(0, i * block); ctx.lineTo(S, i * block);
+  }
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(30,30,30,0.8)";
+  ctx.lineWidth = 3 * k;
+  ctx.strokeRect(1.5 * k, 1.5 * k, S - 3 * k, S - 3 * k);
+
+  if (withOverlay && state.point) drawZones(ctx, S, k);
+}
+
+function drawZones(ctx, S, k) {
+  var px = state.point.x / FIELD_M * S;
+  var py = state.point.y / FIELD_M * S;
+  var m = S / FIELD_M; // px на метр
+  var zones = [
+    { r: 150, fill: "rgba(61,126,166,0.10)", stroke: "#3d7ea6", label: "Неподалёку (50–150 м)", dy: -6 },
+    { r: 50,  fill: "rgba(232,161,60,0.16)", stroke: "#e8a13c", label: "Близко (25–50 м)", dy: -6 },
+    { r: 25,  fill: "rgba(209,73,91,0.20)",  stroke: "#d1495b", label: "Рядом (≤25 м)", dy: -6 }
+  ];
+  var i, z;
+  for (i = 0; i < zones.length; i++) {
+    z = zones[i];
+    ctx.beginPath();
+    ctx.arc(px, py, z.r * m, 0, Math.PI * 2);
+    ctx.fillStyle = z.fill;
+    ctx.fill();
+    ctx.lineWidth = 2 * k;
+    ctx.strokeStyle = z.stroke;
+    ctx.stroke();
+  }
+  // центр
+  ctx.beginPath();
+  ctx.arc(px, py, 3.5 * k, 0, Math.PI * 2);
+  ctx.fillStyle = "#2b2620";
+  ctx.fill();
+
+  // подписи зон
+  ctx.font = (12 * k) + "px -apple-system, 'Segoe UI', Roboto, sans-serif";
+  ctx.textAlign = "center";
+  var labels = [
+    { text: zones[2].label, y: py - 25 * m - 6 * k, color: zones[2].stroke },
+    { text: zones[1].label, y: py - 50 * m - 6 * k, color: zones[1].stroke },
+    { text: zones[0].label, y: py - 150 * m - 6 * k, color: zones[0].stroke },
+    { text: "Далеко (150+ м)", y: py + 150 * m + 16 * k, color: "#6f675a" }
+  ];
+  for (i = 0; i < labels.length; i++) {
+    var lx = Math.min(Math.max(px, 80 * k), S - 80 * k);
+    var ly = Math.min(Math.max(labels[i].y, 14 * k), S - 8 * k);
+    ctx.lineWidth = 3 * k;
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.strokeText(labels[i].text, lx, ly);
+    ctx.fillStyle = labels[i].color;
+    ctx.fillText(labels[i].text, lx, ly);
+  }
+}
+
+// ---------- UI ----------
+
+var canvas = document.getElementById("map");
+var ctx = canvas.getContext("2d");
+var sel = document.getElementById("hexType");
+
+HEX_TYPES.forEach(function (t) {
+  var o = document.createElement("option");
+  o.value = t.id;
+  o.textContent = t.name;
+  sel.appendChild(o);
+});
+
+var legend = document.getElementById("terrainLegend");
+Object.keys(TERRAINS).forEach(function (key) {
+  var li = document.createElement("li");
+  var sw = document.createElement("span");
+  sw.className = "swatch";
+  sw.style.background = TERRAINS[key].color;
+  li.appendChild(sw);
+  li.appendChild(document.createTextNode(TERRAINS[key].name));
+  legend.appendChild(li);
+});
+
+function render() {
+  var dpr = window.devicePixelRatio || 1;
+  var size = Math.round(BASE * dpr);
+  if (canvas.width !== size) { canvas.width = size; canvas.height = size; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawMap(ctx, BASE, true);
+}
+
+document.getElementById("btnGen").addEventListener("click", function () {
+  state.hex = sel.value;
+  generate();
+  render();
+});
+
+sel.addEventListener("change", function () {
+  state.hex = sel.value;
+  generate();
+  render();
+});
+
+canvas.addEventListener("click", function (e) {
+  var r = canvas.getBoundingClientRect();
+  state.point = {
+    x: (e.clientX - r.left) / r.width * FIELD_M,
+    y: (e.clientY - r.top) / r.height * FIELD_M
+  };
+  render();
+});
+
+document.getElementById("btnClear").addEventListener("click", function () {
+  state.point = null;
+  render();
+});
+
+document.getElementById("btnPng").addEventListener("click", function () {
+  var S = 1600, cap = 64;
+  var out = document.createElement("canvas");
+  out.width = S;
+  out.height = S + cap;
+  var octx = out.getContext("2d");
+  octx.fillStyle = "#fff";
+  octx.fillRect(0, 0, S, S + cap);
+  drawMap(octx, S, true);
+  var hexName = HEX_TYPES.filter(function (t) { return t.id === state.hex; })[0].name;
+  octx.fillStyle = "#2b2620";
+  octx.font = "26px Georgia, serif";
+  octx.textAlign = "left";
+  octx.fillText("Местность гекса: " + hexName + " · поле 1 × 1 км", 20, S + 40);
+  octx.font = "20px -apple-system, 'Segoe UI', Roboto, sans-serif";
+  octx.fillStyle = "#6f675a";
+  octx.textAlign = "right";
+  octx.fillText("клетка 25 м · жирная сетка 200 м", S - 20, S + 40);
+  var a = document.createElement("a");
+  a.download = "battle_terrain_" + state.hex + ".png";
+  a.href = out.toDataURL("image/png");
+  a.click();
+});
+
+generate();
+render();
+</script>
+</body>
+</html>
