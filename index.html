@@ -33,13 +33,12 @@
   }
   button.secondary{background:#fff; color:var(--accent)}
   button:hover{filter:brightness(1.08)}
-  .layout{display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start}
-  .map-side{flex:1 1 480px; min-width:300px}
-  .info-side{flex:1 1 320px; min-width:280px; display:flex; flex-direction:column; gap:16px}
   canvas#map{
-    width:100%; max-width:800px; aspect-ratio:1/1; display:block;
+    width:100%; aspect-ratio:1/1; display:block;
     border:1px solid var(--line); border-radius:6px; background:#fff; cursor:crosshair;
   }
+  .legends{display:flex; flex-wrap:wrap; gap:16px; margin-top:16px}
+  .legends .panel{flex:1 1 280px; min-width:260px}
   .hint{color:var(--muted); font-size:.9rem; margin:8px 0 0}
   .panel{
     background:var(--panel); border:1px solid var(--line); border-radius:10px;
@@ -50,12 +49,6 @@
   ul.legend li{display:flex; align-items:center; gap:8px; padding:2px 0}
   .swatch{width:18px; height:18px; border-radius:4px; border:1px solid rgba(0,0,0,.25); flex:none}
   .dot{width:14px; height:14px; border-radius:50%; flex:none}
-  table.rules{border-collapse:collapse; width:100%; font-size:.92rem}
-  table.rules th, table.rules td{
-    border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top;
-  }
-  table.rules th{background:#efe8d8}
-  .note{color:var(--muted); font-size:.85rem; margin:8px 0 0}
   .scale{font-size:.9rem; color:var(--muted); margin-top:6px}
   @media (max-width:720px){ header h1{font-size:1.35rem} }
 </style>
@@ -75,41 +68,23 @@
     <button id="btnClear" class="secondary">Сбросить точку</button>
   </div>
 
-  <div class="layout">
-    <div class="map-side">
-      <canvas id="map" width="800" height="800"></canvas>
-      <p class="hint">Кликните по карте — точка отсчёта и зоны дистанций: Рядом, Близко, Неподалёку, Далеко. Повторный клик переносит точку.</p>
-      <p class="scale">Масштаб: мелкая клетка — 25 м, жирная сетка — 200 м, всё поле — 1 км.</p>
-    </div>
+  <canvas id="map" width="800" height="800"></canvas>
+  <p class="hint">Кликните по карте — точка отсчёта и зоны дистанций: Рядом, Близко, Неподалёку, Далеко. Повторный клик переносит точку.</p>
+  <p class="scale">Масштаб: мелкая клетка — 25 м, жирная сетка — 200 м, всё поле — 1 км.</p>
 
-    <div class="info-side">
-      <div class="panel">
-        <h2>Местность</h2>
-        <ul class="legend" id="terrainLegend"></ul>
-      </div>
-      <div class="panel">
-        <h2>Дистанции (от точки на карте)</h2>
-        <ul class="legend">
-          <li><span class="dot" style="background:#d1495b"></span>Рядом — до 25 м / 28 ярдов</li>
-          <li><span class="dot" style="background:#e8a13c"></span>Близко — 25–50 м / 28–55 ярдов</li>
-          <li><span class="dot" style="background:#3d7ea6"></span>Неподалёку — 50–150 м / 55–165 ярдов</li>
-          <li><span class="dot" style="background:#9a9184"></span>Далеко — 150+ м / 165+ ярдов (всё за кольцом)</li>
-        </ul>
-      </div>
-      <div class="panel">
-        <h2>Правила (2к6 → %)</h2>
-        <table class="rules">
-          <tr><th>Местность гекса</th><th>«Внутри» гекса</th></tr>
-          <tr><td>Открытая</td><td>16,7% — лес; иначе 16,7% — холм; иначе ровная открытая</td></tr>
-          <tr><td>Лесистая</td><td>58,3% — лес; иначе ровная открытая</td></tr>
-          <tr><td>Болотистая</td><td>58,3% — болото; иначе ровная открытая</td></tr>
-          <tr><td>Побережье / речная</td><td>16,7% — лес; иначе 16,7% — болото; иначе 16,7% — холм (если нет болота); иначе ровная открытая</td></tr>
-          <tr><td>Пустынная</td><td>16,7% — дюна; иначе ровная открытая</td></tr>
-          <tr><td>Холмистая</td><td>58,3% — холм; иначе 27,8% — лес; иначе ровная открытая</td></tr>
-          <tr><td>Горы</td><td>27,8% — открытая местность (из неё 41,7% — лес); иначе гора</td></tr>
-        </table>
-        <p class="note">Проценты эквивалентны броскам 2к6: 10+ ≈ 16,7%, 9+ ≈ 27,8%, 8+ ≈ 41,7%, 7+ ≈ 58,3%. Броски последовательные — до первого успеха.</p>
-      </div>
+  <div class="legends">
+    <div class="panel">
+      <h2>Местность</h2>
+      <ul class="legend" id="terrainLegend"></ul>
+    </div>
+    <div class="panel">
+      <h2>Дистанции (от точки на карте)</h2>
+      <ul class="legend">
+        <li><span class="dot" style="background:#d1495b"></span>Рядом — до 25 м / 28 ярдов</li>
+        <li><span class="dot" style="background:#e8a13c"></span>Близко — 25–50 м / 28–55 ярдов</li>
+        <li><span class="dot" style="background:#3d7ea6"></span>Неподалёку — 50–150 м / 55–165 ярдов</li>
+        <li><span class="dot" style="background:#9a9184"></span>Далеко — 150+ м / 165+ ярдов (всё за кольцом)</li>
+      </ul>
     </div>
   </div>
 </div>
@@ -384,11 +359,14 @@ Object.keys(TERRAINS).forEach(function (key) {
 
 function render() {
   var dpr = window.devicePixelRatio || 1;
-  var size = Math.round(BASE * dpr);
+  var cssSize = canvas.clientWidth || BASE;
+  var size = Math.round(cssSize * dpr);
   if (canvas.width !== size) { canvas.width = size; canvas.height = size; }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  drawMap(ctx, BASE, true);
+  drawMap(ctx, cssSize, true);
 }
+
+window.addEventListener("resize", render);
 
 document.getElementById("btnGen").addEventListener("click", function () {
   state.hex = sel.value;
@@ -417,23 +395,12 @@ document.getElementById("btnClear").addEventListener("click", function () {
 });
 
 document.getElementById("btnPng").addEventListener("click", function () {
-  var S = 1600, cap = 64;
+  // чистый квадрат без подписи: 4000 px = 100 px на клетку 25 м — сетка VTT 1:1
+  var S = 4000;
   var out = document.createElement("canvas");
   out.width = S;
-  out.height = S + cap;
-  var octx = out.getContext("2d");
-  octx.fillStyle = "#fff";
-  octx.fillRect(0, 0, S, S + cap);
-  drawMap(octx, S, true);
-  var hexName = HEX_TYPES.filter(function (t) { return t.id === state.hex; })[0].name;
-  octx.fillStyle = "#2b2620";
-  octx.font = "26px Georgia, serif";
-  octx.textAlign = "left";
-  octx.fillText("Местность гекса: " + hexName + " · поле 1 × 1 км", 20, S + 40);
-  octx.font = "20px -apple-system, 'Segoe UI', Roboto, sans-serif";
-  octx.fillStyle = "#6f675a";
-  octx.textAlign = "right";
-  octx.fillText("клетка 25 м · жирная сетка 200 м", S - 20, S + 40);
+  out.height = S;
+  drawMap(out.getContext("2d"), S, true);
   var a = document.createElement("a");
   a.download = "battle_terrain_" + state.hex + ".png";
   a.href = out.toDataURL("image/png");
